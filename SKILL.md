@@ -1,14 +1,20 @@
 ---
 name: mainctrl
 description: >
-  Manage OpenClaw agent tool-call permissions.  A runtime plugin hook
-  intercepts write, edit, exec, process, and apply_patch from
-  controlled agents, redirecting them to delegate work through
-  sub-agents.  Designed for environments that enforce "main never
-  writes code directly".
+  Runtime safety guard for OpenClaw multi-agent workflows.
+  Blocks destructive tools (write, edit, exec, process, apply_patch)
+  for controlled agents, forcing delegation to sub-agents.
+intents:
+  - "stop main agent from writing files directly"
+  - "enforce sub-agent delegation in OpenClaw"
+  - "block destructive tools for controlled agents"
+  - "runtime agent permission management"
+  - "multi-agent tool access control"
+tags: [multi-agent, access-control, delegation, openclaw, agent-orchestration, security]
+icon: 🛡️
 metadata:
   author: iClaw
-  version: "1.0.0"
+  version: "1.0.3"
 ---
 
 # mainctrl — Agent Tool Access Control
@@ -16,12 +22,74 @@ metadata:
 Toggle destructive tool access for controlled agents at runtime,
 without restarting OpenClaw or changing agent configs.
 
+## Quick Start
+
+1. Install the plugin and restart:
+   ```bash
+   ./scripts/mainctrl.sh plugin install
+   ```
+   Then restart the OpenClaw gateway.
+   Safety starts **OFF** — nothing is blocked yet.
+
+2. **Before turning on**, verify at least one sub-agent exists and main can spawn it.
+   Check with the `agents_list` tool — you need at least one agent besides `main`:
+   ```
+   agents_list
+   ```
+   Also verify main's spawn permissions:
+   ```
+   gateway config.get agents.list → main.subagents.allowAgents
+   ```
+   mainctrl blocks main's destructive tools and *requires* at least one
+   sub-agent to delegate the work to. If none is configured or main can't
+   spawn them, set up a sub-agent first.
+
+3. Turn blocking on:
+   ```bash
+   ./scripts/mainctrl.sh on
+   ```
+
+4. Verify:
+   ```bash
+   ./scripts/mainctrl.sh status
+   ```
+   Should show `safety: ON` and all tools `BLOCKED`.
+
+5. Emergency off — temporarily allow all tools.
+   When mainctrl is ON, main can't run commands itself. To turn it off:
+
+   - **Delegate to a sub-agent** (e.g. coder):
+     Spawn a sub-agent to run `./scripts/mainctrl.sh off`.
+   - **Run the script manually** if no sub-agent has exec access:
+     ```bash
+     ./scripts/mainctrl.sh off
+     ```
+
+## Plugin + Skill
+
+mainctrl is two parts that must be installed together:
+
+- **Plugin** (`plugin/index.js`) — a `before_tool_call` hook. It reads
+  `state.json` on every tool call and blocks or allows based on your settings.
+  Installed via `./scripts/mainctrl.sh plugin install`.
+- **Skill** (this directory) — the management side. The CLI script
+  (`mainctrl.sh`) writes config to `state.json`; this SKILL.md tells the
+  agent how to behave when blocked.
+
+Both talk through a shared file — the skill writes `state.json`, the plugin
+reads it. No sockets, no RPC, no restart.
+
+**The skill installs the plugin for you** — run `./scripts/mainctrl.sh plugin install`
+to set up both halves in one step.
+
+
+
 ## How it works
 
-A lightweight OpenClaw plugin (`extensions/mainctrl`) hooks
-`before_tool_call` and inspects every tool call.  When the caller is
-one of the `controlledAgents` and `mainctrl` is **off** by default (permissive),
-the following tools are blocked:
+Mainctrl gives the agent two modes, like vi's V and I:
+
+**Visual mode** (`mainctrl on`) — the agent can inspect, search, and read,
+but cannot modify anything. Every destructive tool call is blocked:
 
 | Tool         | Why blocked                          |
 |--------------|--------------------------------------|
@@ -30,6 +98,16 @@ the following tools are blocked:
 | `exec`       | Shell command execution              |
 | `process`    | Background process management        |
 | `apply_patch`| Multi-file patching                  |
+
+**Insert mode** (`mainctrl off`) — the agent can write files, run commands,
+and make changes freely.
+
+Switch between them with `./scripts/mainctrl.sh on` and `./scripts/mainctrl.sh off`.
+
+A lightweight OpenClaw plugin (`extensions/mainctrl`) hooks
+`before_tool_call` and inspects every tool call. When the caller is
+one of the `controlledAgents` and `mainctrl` is enabled, the above
+tools are rejected with a delegation message.
 
 Agents not in `controlledAgents` are **never** affected —
 they always have full tool access.
@@ -46,6 +124,16 @@ it MUST:
 2. Immediately spawn a sub-agent (coder, tester, auditor, or publicist) to complete the blocked operation.
 
 Do NOT wait for the user to confirm — report and delegate in the same turn.
+
+### Blocked tool response
+
+When a controlled agent calls a blocked tool, it receives:
+
+> Delegate this work to a sub-agent instead.
+> Use sessions_spawn to dispatch to coder, tester, auditor, or publicist.
+
+The agent follows the [Agent behavior rule](#agent-behavior-rule) and
+spawns a sub-agent to complete the work automatically.
 
 ## Why this approach
 
@@ -112,6 +200,19 @@ restart the gateway for the change to take effect.
 ./scripts/mainctrl.sh on
 ```
 
+### controlledAgents config
+
+`controlledAgents` lists which agents are subject to tool blocking.
+Example configs:
+
+```json
+{ "enabled": true, "controlledAgents": ["main"] }
+```
+
+```json
+{ "enabled": true, "controlledAgents": ["main", "auditor"] }
+```
+
 ## State file
 
 `skills/mainctrl/scripts/state.json` (in the `scripts/` directory):
@@ -131,6 +232,15 @@ Changes take effect immediately on the next tool call — no restart needed.
 The companion extension lives at `extensions/mainctrl/`.
 It reads `state.json` on every `before_tool_call` event,
 so the latency is a single `fs.readFileSync` per tool call.
+
+## Troubleshooting
+
+| Symptom | Check |
+|---------|-------|
+| Blocking not working | `./scripts/mainctrl.sh status` — ensure safety is ON |
+| Plugin not loaded | `openclaw plugins list` — ensure mainctrl is enabled |
+| Agent still blocked after `off` | Restart the gateway |
+| Sub-agent blocked too | Run `./scripts/mainctrl.sh agents main` to restrict to main only |
 
 ## Verification
 
