@@ -219,14 +219,8 @@ Substring matching is used (e.g. `-exec` also catches `-execdir`).
 directly (no CLI subcommand for this):
 
 ```bash
-# Example: allow cat, block redirection
-# Edit skills/mainctrl/scripts/state.json:
-"execAllowExcept": {
-  "find": ["-exec", "-ok", "-delete", "-fprint", "|", "$(", ">", ">>"],
-  "ls":   [">", ">>"],
-  "pwd":  [">", ">>"],
-  "cat":  [">", ">>"]
-}
+# Set via CLI
+./scripts/mainctrl.sh allow-except '{"find":["-exec","-ok","-delete","-fprint","|","$(",">",">>"],"ls":[">",">>","|"],"pwd":[">",">>","|"],"cat":[">",">>","|"]}'
 ```
 
 Run `./scripts/mainctrl.sh status` to see the current allow-except configuration.

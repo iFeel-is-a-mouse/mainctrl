@@ -21,11 +21,18 @@ Restart the gateway after install.
 
 ## How it works
 
-Every tool call hits the hook. Three checks, one file read:
+Every tool call hits the hook. Multiple checks, one file read:
 
 1. `enabled` true? No → let it through.
 2. Caller is a controlled agent? No → let it through.
 3. Tool is on the blocked list? Yes → block. No → let it through.
+
+`execAllowExcept` only takes effect when `exec` is in `blockedTools`. If `exec` is not blocked, all commands pass through regardless of this config.
+
+For `exec`, the plugin also checks `execAllowExcept`: commands listed
+as keys are allowed through unless their command line contains an allow-except
+pattern (substring match). Commands not in the map fall through to the
+normal block.
 
 State lives in `skills/mainctrl/scripts/state.json`. The plugin reads it on
 every invocation — one synchronous filesystem read. If the file is missing or
@@ -50,9 +57,19 @@ See the skill's `scripts/state.json`:
 {
   "enabled": true,
   "controlledAgents": ["main"],
-  "blockedTools": ["write", "edit", "exec", "process", "apply_patch"]
+  "blockedTools": ["write", "edit", "exec", "process", "apply_patch"],
+  "execAllowExcept": {
+    "find": ["-exec", "-ok", "-delete", "-fprint", "|", "$(", ">", ">>"],
+    "ls":   [">", ">>", "|"],
+    "pwd":  [">", ">>", "|"]
+  }
 }
 ```
+
+Set to empty to disable a control:
+- `"blockedTools": []` — no tools blocked
+- `"execAllowExcept": {}` — no exec exceptions, all exec blocked
+- `"controlledAgents": []` — clear all (falls back to default `["main"]`)
 
 ## Files
 

@@ -58,11 +58,15 @@ Switch instantly — no restarts.
 ./scripts/mainctrl.sh off         # emergency off — everything passes through
 ./scripts/mainctrl.sh status      # see what's happening
 
-./scripts/mainctrl.sh agents main auditor   # control more agents
-./scripts/mainctrl.sh agents                # stop controlling all agents
+./scripts/mainctrl.sh agents '["main","auditor"]'   # JSON array
+./scripts/mainctrl.sh agents '[]'                    # clear all (falls back to default)
 
-./scripts/mainctrl.sh tools                 # see what's blocked
-./scripts/mainctrl.sh tools write exec      # only block write and exec
+./scripts/mainctrl.sh tools                    # see what's blocked
+./scripts/mainctrl.sh tools '["write","exec"]' # set blocked tools (JSON array)
+./scripts/mainctrl.sh tools '[]'                     # no tools blocked
+
+./scripts/mainctrl.sh allow-except '{"ls":[">",">>","|"],"pwd":[">",">>","|"],"find":["-exec","-ok","-delete","-fprint","|","$(",">",">>"]}'
+./scripts/mainctrl.sh allow-except '{}'              # no exec exceptions, all exec blocked
 ```
 
 `status` output:
@@ -79,15 +83,21 @@ mainctrl status:
   exec            BLOCKED
   process         BLOCKED
   apply_patch     BLOCKED
+  exec allow-except:
+    ls: ['>', '>>', '|']
+    pwd: ['>', '>>', '|']
+    find: ['-exec', '-ok', '-delete', '-fprint', '|', '$(', '>', '>>']
 ```
 
 ## How it works
 
-Every tool call hits the hook. Three checks, one file read:
+Every tool call hits the hook. Four checks, one file read:
 
 1. `enabled` true? No → let it through.
 2. Caller is a controlled agent? No → let it through.
 3. Tool is on the blocked list? Yes → block. No → let it through.
+4. For `exec`: command in `execAllowExcept` keys → check allow-except patterns.
+   If any allow-except pattern matches the command line → block. Otherwise → allow.
 
 Five tools blocked by default: `write`, `edit`, `exec`, `process`,
 `apply_patch`. Read-only tools always pass through.
@@ -98,12 +108,28 @@ State lives in `scripts/state.json`:
 {
   "enabled": false,
   "controlledAgents": ["main"],
-  "blockedTools": ["write", "edit", "exec", "process", "apply_patch"]
+  "blockedTools": ["write", "edit", "exec", "process", "apply_patch"],
+  "execAllowExcept": {
+    "find": ["-exec", "-ok", "-delete", "-fprint", "|", "$(", ">", ">>"],
+    "ls":   [">", ">>", "|"],
+    "pwd":  [">", ">>", "|"]
+  }
 }
 ```
 
 Changes take effect on the next tool call. If the file is missing or
 corrupted, the plugin falls back to permissive mode (everything allowed).
+
+## Exec allow-except
+
+`execAllowExcept` only takes effect when `exec` is in `blockedTools`. If `exec` is not blocked, all commands pass through regardless of this config.
+
+When `exec` is blocked, safe read-only commands (`ls`, `find`, `pwd`) are
+allowed through — unless the command contains an allow-except pattern like
+`>`, `>>`, `|`, or (for `find`) `-exec`, `-delete`, etc.
+
+Configure via `execAllowExcept` in `state.json`. See `./scripts/mainctrl.sh status`
+for current allow-except settings.
 
 ## Why not `tools.deny`?
 
@@ -119,7 +145,7 @@ skills/mainctrl/
 ├── README.md                # this file
 ├── SKILL.md                 # agent-facing instructions
 ├── scripts/
-│   ├── mainctrl.sh          # CLI: on, off, status, agents, tools, plugin
+│   ├── mainctrl.sh          # CLI: on, off, status, agents, tools, allow-except, plugin
 │   └── state.json           # runtime config — CLI writes, plugin reads
 └── plugin/
     ├── index.js             # before_tool_call hook
