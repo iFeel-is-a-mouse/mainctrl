@@ -14,7 +14,7 @@ tags: [multi-agent, access-control, delegation, openclaw, agent-orchestration, s
 icon: 🛡️
 metadata:
   author: iClaw
-  version: "1.0.3"
+  version: "1.0.4"
 ---
 
 # mainctrl — Agent Tool Access Control
