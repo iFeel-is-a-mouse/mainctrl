@@ -14,7 +14,7 @@ tags: [multi-agent, access-control, delegation, openclaw, agent-orchestration, s
 icon: 🛡️
 metadata:
   author: iClaw
-  version: "1.1.0"
+  version: "1.1.1"
 ---
 
 # mainctrl — Agent Tool Access Control
@@ -171,6 +171,33 @@ When a controlled agent calls a blocked tool, it receives:
 
 The agent follows the [Agent behavior rule](#agent-behavior-rule) and
 spawns a sub-agent to complete the work automatically.
+
+## Security Design Notes
+
+### 1. Internal guard, not anti-hacker
+
+This is an **internal self-discipline mechanism**, not a defense against external attacks.
+mainctrl makes the LLM agent *think twice* before proceeding with destructive
+operations. It is not a sandbox or security boundary; the goal is to prevent
+accidental misuse by the agent itself (e.g., main writing code when it should
+delegate to coder), not to stop a malicious attacker. Treat it as a guardrail
+that makes the LLM say "should I really do this myself?" — not a fortress.
+
+### 2. Explicit delegation
+
+When spawning a sub-agent to replace a blocked operation, always state **who**
+is being delegated and **why**. For example:
+
+> `exec` blocked. Delegating to **coder** to run the command.
+
+This transparency helps the user understand the delegation chain at a glance.
+
+### 3. Direct for skill execution
+
+All CLI commands in this skill are designed for **programmatic execution** (by
+agents or other skills). There are no interactive prompts, confirmations, or
+friction — they complete in one shot. This is intentional: when an agent needs to
+toggle safety or reconfigure, it must not hang waiting for user input.
 
 ## Why this approach
 
