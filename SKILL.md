@@ -14,13 +14,16 @@ tags: [multi-agent, access-control, delegation, openclaw, agent-orchestration, s
 icon: 🛡️
 metadata:
   author: iClaw
-  version: "1.0.4"
+  version: "1.0.5"
 ---
 
 # mainctrl — Agent Tool Access Control
 
-Toggle destructive tool access for controlled agents at runtime,
-without restarting OpenClaw or changing agent configs.
+mainctrl lets you control which agents can use destructive tools (write,
+edit, exec, process, apply_patch). Turn it on — main delegates everything
+to sub-agents. Turn it off — main is free. Add or remove agents from the
+controlled list to extend protection. Install or remove the companion
+plugin in one command. No restarts, no config edits.
 
 ## Quick Start
 
@@ -241,6 +244,42 @@ so the latency is a single `fs.readFileSync` per tool call.
 | Plugin not loaded | `openclaw plugins list` — ensure mainctrl is enabled |
 | Agent still blocked after `off` | Restart the gateway |
 | Sub-agent blocked too | Run `./scripts/mainctrl.sh agents main` to restrict to main only |
+
+## Examples
+
+What you can do with mainctrl:
+
+### Control the safety switch
+
+```bash
+./scripts/mainctrl.sh on      # Block destructive tools — delegate mode
+./scripts/mainctrl.sh off     # Allow all tools — free mode
+./scripts/mainctrl.sh status  # Check current state
+```
+
+### Add or remove controlled agents
+
+```bash
+./scripts/mainctrl.sh agents main           # Control main only
+./scripts/mainctrl.sh agents main auditor   # Add auditor to the list
+./scripts/mainctrl.sh agents                # Clear the list (stops all blocking)
+```
+
+### Add or remove blocked tools
+
+```bash
+./scripts/mainctrl.sh tools                        # Show which tools are blocked
+./scripts/mainctrl.sh tools write exec             # Block only write and exec
+./scripts/mainctrl.sh tools write edit exec        # Block three
+./scripts/mainctrl.sh tools write edit exec process apply_patch  # Block all five (default)
+```
+
+### Manage the plugin
+
+```bash
+./scripts/mainctrl.sh plugin install   # Install the companion plugin
+./scripts/mainctrl.sh plugin remove    # Uninstall the plugin
+```
 
 ## Verification
 
