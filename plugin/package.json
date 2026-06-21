@@ -1,6 +1,6 @@
 {
   "name": "mainctrl",
-  "version": "1.0.4",
+  "version": "1.1.0",
   "description": "Runtime tool-access guard for OpenClaw agents. Intercepts destructive tool calls before they execute, redirecting controlled agents to delegate via sub-agents.",
   "type": "module",
   "main": "index.js",

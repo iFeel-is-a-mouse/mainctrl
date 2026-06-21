@@ -14,7 +14,7 @@ tags: [multi-agent, access-control, delegation, openclaw, agent-orchestration, s
 icon: 🛡️
 metadata:
   author: iClaw
-  version: "1.0.6"
+  version: "1.1.0"
 ---
 
 # mainctrl — Agent Tool Access Control
@@ -102,6 +102,40 @@ but cannot modify anything. Every destructive tool call is blocked:
 | `process`    | Background process management        |
 | `apply_patch`| Multi-file patching                  |
 
+### Tools NOT blocked
+
+When mainctrl is ON, these tools remain fully available to the controlled agent:
+
+| Tool             | Purpose                              |
+|------------------|--------------------------------------|
+| `read`           | File reading / inspection            |
+| `web_search`     | Web search                           |
+| `web_fetch`      | URL content fetching                 |
+| `sessions_spawn` | Sub-agent delegation                 |
+| `sessions_send`  | Cross-session messaging              |
+| `sessions_list`  | Session discovery                    |
+| `sessions_history` | Session history                    |
+| `image`          | Image analysis                       |
+| `pdf`            | PDF analysis                         |
+| `memory_search`  | Memory search                        |
+| `memory_get`     | Memory read                          |
+| `message`        | Channel messaging                    |
+| `gateway`        | Config read / status                 |
+| `skill_workshop` | Skill management                     |
+| `cron`           | Job scheduling                       |
+| `nodes`          | Node device queries                  |
+| `tts`            | Text-to-speech                       |
+| `agents_list`    | Agent discovery                      |
+
+**🔴 Do NOT default to `exec` for inspection tasks.** When you need to explore
+directories, read files, check config, or verify state, use `read` — it's
+available, immediate, and never blocked. `exec` is only for tasks that truly
+require shell access (build, install, git, etc.), and those should always be
+delegated to sub-agents.
+
+This is how today's incident happened: the agent used `exec` for `find` and `ls`
+instead of `read` — needless blocking and unnecessary sub-agent overhead.
+
 **Insert mode** (`mainctrl off`) — the agent can write files, run commands,
 and make changes freely.
 
@@ -150,17 +184,76 @@ is invoking a tool; the plugin hook can selectively block agents
 listed in `controlledAgents` while leaving sub-agents (like `coder`)
 unaffected.
 
+## Exec allow-except — safe exec commands
+
+`execAllowExcept` only takes effect when `exec` is in `blockedTools`. If `exec` is not blocked, all commands pass through regardless of this config.
+
+When `exec` is in the blocked tools list, mainctrl inspects the command
+before blocking. Commands listed as keys in `execAllowExcept` are
+**allowed through** — unless the command line contains an allow-except pattern.
+
+### How it works
+
+1. Command's first word is looked up in `execAllowExcept`
+2. If the command is **not a key** → blocked as usual (delegate)
+3. If the command **is a key** → each allow-except pattern is checked against the full command string
+4. If any allow-except pattern matches → blocked with a specific reason
+5. If no allow-except pattern matches → **allowed**
+
+### Allow-except patterns
+
+| Command | Allow-except patterns | What they catch |
+|---------|----------------------|-----------------|
+| `find`  | `-exec`, `-ok` | Execute commands on matched files |
+|         | `-delete`     | Delete matched files |
+|         | `-fprint`     | Write to arbitrary files |
+|         | `\|`, `$(` , `>` , `>>` | Pipes, command substitution, redirection |
+| `ls`    | `>` , `>>` , `|` | Output redirection, pipes |
+| `pwd`   | `>` , `>>` , `|` | Output redirection, pipes |
+
+Substring matching is used (e.g. `-exec` also catches `-execdir`).
+
+### Configuration
+
+`execAllowExcept` lives in `state.json`. To modify it, edit the file
+directly (no CLI subcommand for this):
+
+```bash
+# Example: allow cat, block redirection
+# Edit skills/mainctrl/scripts/state.json:
+"execAllowExcept": {
+  "find": ["-exec", "-ok", "-delete", "-fprint", "|", "$(", ">", ">>"],
+  "ls":   [">", ">>"],
+  "pwd":  [">", ">>"],
+  "cat":  [">", ">>"]
+}
+```
+
+Run `./scripts/mainctrl.sh status` to see the current allow-except configuration.
+
+### Examples
+
+```
+ls ~/                    # ✅ allowed (no allow-except hit)
+find . -type f            # ✅ allowed
+find . -exec rm {} \;     # 🛡 blocked: "-exec"
+ls > /tmp/foo             # 🛡 blocked: ">"
+cat /etc/hosts            # 🛡 blocked: not in allow-except map
+rm -rf /                  # 🛡 blocked: not in allow-except map
+```
+
 ## Commands
 
 Use the `mainctrl.sh` script in the `scripts/` directory:
 
 | Command                          | Effect                              |
 |----------------------------------|-------------------------------------|
-| `./scripts/mainctrl.sh status`                | Show current state (enabled + agents + per-tool) |
+| `./scripts/mainctrl.sh status`                | Show current state (enabled + agents + per-tool + exec allow-except) |
 | `./scripts/mainctrl.sh on`                    | Enable blocking                     |
 | `./scripts/mainctrl.sh off`                   | Disable blocking (all tools pass through) |
-| `./scripts/mainctrl.sh agents <a1> [a2] ...` | Set which agents are controlled     |
-| `./scripts/mainctrl.sh tools [<t1> [t2] ...]` | Set or show blocked tools list      |
+| `./scripts/mainctrl.sh agents '<json-array>'` | Set which agents are controlled     |
+| `./scripts/mainctrl.sh tools '<json-array>'` | Set or show blocked tools list      |
+| `./scripts/mainctrl.sh allow-except '<json>'` | Set execAllowExcept config (JSON object) |
 | `./scripts/mainctrl.sh plugin install` | Install the companion plugin via openclaw plugins |
 | `./scripts/mainctrl.sh plugin remove`  | Disable and uninstall the companion plugin       |
 
@@ -202,7 +295,12 @@ Example configs:
 {
   "enabled": false,
   "controlledAgents": ["main"],
-  "blockedTools": ["write", "edit", "exec", "process", "apply_patch"]
+  "blockedTools": ["write", "edit", "exec", "process", "apply_patch"],
+  "execAllowExcept": {
+    "find": ["-exec", "-ok", "-delete", "-fprint", "|", "$(", ">", ">>"],
+    "ls":   [">", ">>", "|"],
+    "pwd":  [">", ">>", "|"]
+  }
 }
 ```
 
@@ -222,6 +320,7 @@ so the latency is a single `fs.readFileSync` per tool call.
 | Plugin not loaded | `openclaw plugins list` — ensure mainctrl is enabled |
 | Agent still blocked after `off` | Restart the gateway |
 | Sub-agent blocked too | Run `./scripts/mainctrl.sh agents main` to restrict to main only |
+| Safe exec command blocked | Check `./scripts/mainctrl.sh status` — command must be in exec allow-except map and not matching allow-except patterns |
 
 ## Examples
 
@@ -238,18 +337,19 @@ What you can do with mainctrl:
 ### Add or remove controlled agents
 
 ```bash
-./scripts/mainctrl.sh agents main           # Control main only
-./scripts/mainctrl.sh agents main auditor   # Add auditor to the list
-./scripts/mainctrl.sh agents                # Clear the list (stops all blocking)
+./scripts/mainctrl.sh agents '["main"]'             # Control main only
+./scripts/mainctrl.sh agents '["main","auditor"]'   # Add auditor to the list
+./scripts/mainctrl.sh agents '[]'                   # Clear all (falls back to default)
 ```
 
 ### Add or remove blocked tools
 
 ```bash
-./scripts/mainctrl.sh tools                        # Show which tools are blocked
-./scripts/mainctrl.sh tools write exec             # Block only write and exec
-./scripts/mainctrl.sh tools write edit exec        # Block three
-./scripts/mainctrl.sh tools write edit exec process apply_patch  # Block all five (default)
+./scripts/mainctrl.sh tools                                          # Show which tools are blocked
+./scripts/mainctrl.sh tools '["write","exec"]'                       # Block only write and exec
+./scripts/mainctrl.sh tools '["write","edit","exec"]'                # Block three
+./scripts/mainctrl.sh tools '["write","edit","exec","process","apply_patch"]'  # Block all five (default)
+./scripts/mainctrl.sh tools '[]'                                     # No tools blocked
 ```
 
 ### Manage the plugin
@@ -259,6 +359,13 @@ What you can do with mainctrl:
 ./scripts/mainctrl.sh plugin remove    # Uninstall the plugin
 ```
 
+### Set exec allow-except
+
+```bash
+./scripts/mainctrl.sh allow-except '{"ls":[">",">>","|"],"pwd":[">",">>","|"],"find":["-exec","-ok","-delete","-fprint","|","$(",">",">>"]}'
+./scripts/mainctrl.sh allow-except '{}'              # No exec exceptions, all exec blocked
+```
+
 ## Verification
 
 - [ ] Plugin installed: `./scripts/mainctrl.sh plugin install`
@@ -266,3 +373,4 @@ What you can do with mainctrl:
 - [ ] Tool blocked: main agent exec/write/edit/process/apply_patch return block message
 - [ ] Sub-agent unaffected: coder can still use write/exec
 - [ ] Toggle works: `./scripts/mainctrl.sh off` then `./scripts/mainctrl.sh on` restores blocking
+- [ ] Exec allow-except works: `ls ~/` passes, `ls > /tmp/foo` blocked
