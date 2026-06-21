@@ -14,7 +14,7 @@ tags: [multi-agent, access-control, delegation, openclaw, agent-orchestration, s
 icon: 🛡️
 metadata:
   author: iClaw
-  version: "1.0.5"
+  version: "1.0.6"
 ---
 
 # mainctrl — Agent Tool Access Control
@@ -180,28 +180,6 @@ use the built-in script:
 This calls `openclaw plugins install` / `uninstall`, which manages the
 plugin under OpenClaw's native plugin registry.  After install or remove,
 restart the gateway for the change to take effect.
-
-### Examples
-
-```bash
-# Check current state
-./scripts/mainctrl.sh status
-
-# Control main only (default)
-./scripts/mainctrl.sh agents main
-
-# Control main and auditor
-./scripts/mainctrl.sh agents main auditor
-
-# Remove all agents from control (effectively disables blocking)
-./scripts/mainctrl.sh agents
-
-# Emergency off — let everyone do anything
-./scripts/mainctrl.sh off
-
-# Turn safety back on
-./scripts/mainctrl.sh on
-```
 
 ### controlledAgents config
 
