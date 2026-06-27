@@ -200,7 +200,7 @@ cmd_refresh_memory() {
     echo '```'
   } > "$tmpfile"
 
-  node -e "const fs=require('fs');const newBlock=fs.readFileSync(process.argv[1],'utf8');const memFile=process.argv[2];let content='';try{content=fs.readFileSync(memFile,'utf8')}catch(e){}const m=content.match(/^### mainctrl 运行状态\\n+\x60{3}\\n[\\s\\S]*?\\n\x60{3}/m);if(m){content=content.slice(0,m.index)+newBlock+content.slice(m.index+m[0].length)}else{if(content&&!content.endsWith('\\n'))content+='\\n';content+='\\n'+newBlock}fs.writeFileSync(memFile,content)" "$tmpfile" "$memory_file"
+  node -e "const fs=require('fs');const newBlock=fs.readFileSync(process.argv[1],'utf8');const memFile=process.argv[2];let content='';try{content=fs.readFileSync(memFile,'utf8')}catch(e){}const m=content.match(/^### mainctrl 运行状态\\n+\x60{3}\\n[\\s\\S]*?\\n\x60{3}/m);if(m){content=content.slice(0,m.index)+newBlock+content.slice(m.index+m[0].length)}else{if(content){if(!content.endsWith('\\n'))content+='\\n';content+='\\n'+newBlock}else{content=newBlock}}fs.writeFileSync(memFile,content)" "$tmpfile" "$memory_file"
 
   rm -f "$tmpfile"
   echo "mainctrl: memory refreshed → $memory_file"
