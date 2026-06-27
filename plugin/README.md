@@ -61,7 +61,9 @@ See the skill's `scripts/state.json`:
   "execAllowExcept": {
     "find": ["-exec", "-ok", "-delete", "-fprint", "|", "$(", ">", ">>"],
     "ls":   [">", ">>", "|"],
-    "pwd":  [">", ">>", "|"]
+    "pwd":  [">", ">>", "|"],
+    "sed":  [">", ">>", "|", ".java", ".py", ".js", ".html", ".css"],
+    "cat":  [">", ">>", "|"]
   }
 }
 ```

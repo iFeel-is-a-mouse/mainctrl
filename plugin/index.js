@@ -11,6 +11,8 @@ const DEFAULT_EXEC_ALLOW_EXCEPT = {
   find:  ["-exec", "-ok", "-delete", "-fprint", "|", "$(", ">", ">>"],
   ls:    [">", ">>", "|"],
   pwd:   [">", ">>", "|"],
+  sed:   [">", ">>", "|", ".java", ".py", ".js", ".html", ".css"],
+  cat:   [">", ">>", "|"],
 };
 
 /**

@@ -65,8 +65,10 @@ Switch instantly — no restarts.
 ./scripts/mainctrl.sh tools '["write","exec"]' # set blocked tools (JSON array)
 ./scripts/mainctrl.sh tools '[]'                     # no tools blocked
 
-./scripts/mainctrl.sh allow-except '{"ls":[">",">>","|"],"pwd":[">",">>","|"],"find":["-exec","-ok","-delete","-fprint","|","$(",">",">>"]}'
+./scripts/mainctrl.sh allow-except '{"find":["-exec","-ok","-delete","-fprint","|","$(",">",">>"],"ls":[">",">>","|"],"pwd":[">",">>","|"],"sed":[">",">>","|",".java",".py",".js",".html",".css"],"cat":[">",">>","|"]}'
 ./scripts/mainctrl.sh allow-except '{}'              # no exec exceptions, all exec blocked
+
+./scripts/mainctrl.sh refresh-memory    # snapshot status into MEMORY.md
 ```
 
 `status` output:
@@ -84,9 +86,11 @@ mainctrl status:
   process         BLOCKED
   apply_patch     BLOCKED
   exec allow-except:
-    ls: ['>', '>>', '|']
-    pwd: ['>', '>>', '|']
-    find: ['-exec', '-ok', '-delete', '-fprint', '|', '$(', '>', '>>']
+    ls: [">", ">>", "|"]
+    pwd: [">", ">>", "|"]
+    find: ["-exec", "-ok", "-delete", "-fprint", "|", "$(", ">", ">>"]
+    sed: [">", ">>", "|", ".java", ".py", ".js", ".html", ".css"]
+    cat: [">", ">>", "|"]
 ```
 
 ## How it works
@@ -112,7 +116,9 @@ State lives in `scripts/state.json`:
   "execAllowExcept": {
     "find": ["-exec", "-ok", "-delete", "-fprint", "|", "$(", ">", ">>"],
     "ls":   [">", ">>", "|"],
-    "pwd":  [">", ">>", "|"]
+    "pwd":  [">", ">>", "|"],
+    "sed":  [">", ">>", "|", ".java", ".py", ".js", ".html", ".css"],
+    "cat":  [">", ">>", "|"]
   }
 }
 ```

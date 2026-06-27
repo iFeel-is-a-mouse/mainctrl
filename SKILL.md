@@ -25,6 +25,16 @@ to sub-agents. Turn it off — main is free. Add or remove agents from the
 controlled list to extend protection. Install or remove the companion
 plugin in one command. No restarts, no config edits.
 
+## Startup Behavior
+
+Every time mainctrl is loaded (the agent reads this SKILL.md), it MUST:
+
+1. Run `./scripts/mainctrl.sh status` to read the current runtime state.
+2. Remember the output internally — which tools are blocked, which
+   agents are controlled, and the current exec allow-except config.
+   This contextual awareness guides every subsequent tool call: know
+   when to delegate and which commands can pass through.
+
 ## Quick Start
 
 1. Install the plugin and restart:
@@ -33,6 +43,9 @@ plugin in one command. No restarts, no config edits.
    ```
    Then restart the OpenClaw gateway.
    Safety starts **OFF** — nothing is blocked yet.
+
+   After restart, run `./scripts/mainctrl.sh status` to load the
+   current control state into context per [Startup Behavior](#startup-behavior).
 
 2. **Before turning on**, verify at least one sub-agent exists and main can spawn it.
    Check with the `agents_list` tool — you need at least one agent besides `main`:
@@ -84,8 +97,6 @@ reads it. No sockets, no RPC, no restart.
 
 **The skill installs the plugin for you** — run `./scripts/mainctrl.sh plugin install`
 to set up both halves in one step.
-
-
 
 ## How it works
 
@@ -237,6 +248,9 @@ before blocking. Commands listed as keys in `execAllowExcept` are
 |         | `\|`, `$(` , `>` , `>>` | Pipes, command substitution, redirection |
 | `ls`    | `>` , `>>` , `|` | Output redirection, pipes |
 | `pwd`   | `>` , `>>` , `|` | Output redirection, pipes |
+| `sed`   | `>` , `>>` , `|` | Output redirection, pipes |
+|         | `.java` , `.py` , `.js` , `.html` , `.css` | Direct source file modification |
+| `cat`   | `>` , `>>` , `|` | Output redirection, pipes |
 
 Substring matching is used (e.g. `-exec` also catches `-execdir`).
 
@@ -247,7 +261,7 @@ directly (no CLI subcommand for this):
 
 ```bash
 # Set via CLI
-./scripts/mainctrl.sh allow-except '{"find":["-exec","-ok","-delete","-fprint","|","$(",">",">>"],"ls":[">",">>","|"],"pwd":[">",">>","|"],"cat":[">",">>","|"]}'
+./scripts/mainctrl.sh allow-except '{"find":["-exec","-ok","-delete","-fprint","|","$(",">",">>"],"ls":[">",">>","|"],"pwd":[">",">>","|"],"sed":[">",">>","|",".java",".py",".js",".html",".css"],"cat":[">",">>","|"]}'
 ```
 
 Run `./scripts/mainctrl.sh status` to see the current allow-except configuration.
@@ -259,7 +273,8 @@ ls ~/                    # ✅ allowed (no allow-except hit)
 find . -type f            # ✅ allowed
 find . -exec rm {} \;     # 🛡 blocked: "-exec"
 ls > /tmp/foo             # 🛡 blocked: ">"
-cat /etc/hosts            # 🛡 blocked: not in allow-except map
+sed -i 's/foo/bar/g' file.java  # 🛡 blocked: ".java"
+cat /etc/hosts            # ✅ allowed (no allow-except hit)
 rm -rf /                  # 🛡 blocked: not in allow-except map
 ```
 
@@ -275,6 +290,7 @@ Use the `mainctrl.sh` script in the `scripts/` directory:
 | `./scripts/mainctrl.sh agents '<json-array>'` | Set which agents are controlled     |
 | `./scripts/mainctrl.sh tools '<json-array>'` | Set or show blocked tools list      |
 | `./scripts/mainctrl.sh allow-except '<json>'` | Set execAllowExcept config (JSON object) |
+| `./scripts/mainctrl.sh refresh-memory`    | Write current status to ~/.openclaw/workspace/MEMORY.md |
 | `./scripts/mainctrl.sh plugin install` | Install the companion plugin via openclaw plugins |
 | `./scripts/mainctrl.sh plugin remove`  | Disable and uninstall the companion plugin       |
 
@@ -320,7 +336,9 @@ Example configs:
   "execAllowExcept": {
     "find": ["-exec", "-ok", "-delete", "-fprint", "|", "$(", ">", ">>"],
     "ls":   [">", ">>", "|"],
-    "pwd":  [">", ">>", "|"]
+    "pwd":  [">", ">>", "|"],
+    "sed":  [">", ">>", "|", ".java", ".py", ".js", ".html", ".css"],
+    "cat":  [">", ">>", "|"]
   }
 }
 ```
@@ -383,7 +401,7 @@ What you can do with mainctrl:
 ### Set exec allow-except
 
 ```bash
-./scripts/mainctrl.sh allow-except '{"ls":[">",">>","|"],"pwd":[">",">>","|"],"find":["-exec","-ok","-delete","-fprint","|","$(",">",">>"]}'
+./scripts/mainctrl.sh allow-except '{"find":["-exec","-ok","-delete","-fprint","|","$(",">",">>"],"ls":[">",">>","|"],"pwd":[">",">>","|"],"sed":[">",">>","|",".java",".py",".js",".html",".css"],"cat":[">",">>","|"]}'
 ./scripts/mainctrl.sh allow-except '{}'              # No exec exceptions, all exec blocked
 ```
 
